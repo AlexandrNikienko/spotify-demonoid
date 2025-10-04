@@ -13,10 +13,15 @@ script.async = true;
 document.body.appendChild(script);
 
 // Spotify Web Playback SDK requires this global function
+let currentDeviceId: string | null = null;
+
 (window as any).onSpotifyWebPlaybackSDKReady = () => {
     const player = new (window as any).Spotify.Player({
         name: "Web Player",
-        getOAuthToken: (cb: (token: string) => void) => { cb(storedToken!); },
+        getOAuthToken: async (cb: (token: string) => void) => {
+            const freshToken = await getValidAccessToken();
+            cb(freshToken);
+        },
         volume: 0.5
     });
 
@@ -35,6 +40,21 @@ document.body.appendChild(script);
     // Connect!
     player.connect();
 };
+
+async function getValidAccessToken(): Promise<string> {
+    const token = localStorage.getItem("access_token");
+    const expiry = Number(localStorage.getItem("access_token_expiry"));
+
+    if (token && expiry > Date.now()) {
+        return token; // still valid
+    }
+
+    // expired → restart login flow
+    console.warn("Access token expired, redirecting to auth flow...");
+    redirectToAuthCodeFlow(clientId);
+
+    return new Promise(() => {}); // never resolves (since we redirect)
+}
 
 
 // // Check token validity
@@ -190,113 +210,84 @@ function populateUI(profile: UserProfile) {
 }
 
 // ===== PLAYER =====
-
-let skipIntervalId: number | null = null;
-let currentDeviceId: string | null = null;
-let currentPlaylistId: string | null = null;
-
 function initPlayer() {
-    const addBtn = document.getElementById("add-playlist-btn")!;
+    let skipIntervalId: number | null = null;
+    let currentPlaylistId: string | null = null;
+    let playlistTracks: string[] = [];
+    let currentTrackIndex = 0;
+
     const playlistInput = document.getElementById("playlist-input") as HTMLInputElement;
+    const addBtn = document.getElementById("add-playlist-btn")!;
+    const select = document.getElementById("playlist-select") as HTMLSelectElement;
+    const loadBtn = document.getElementById("load-playlist-btn")!;
     const playBtn = document.getElementById("play-btn")!;
-    const pauseBtn = document.getElementById("pause-btn")!;
     const stopBtn = document.getElementById("stop-btn")!;
     const skipIntervalInput = document.getElementById("skip-interval-input") as HTMLInputElement;
     const iframe = document.getElementById("spotify-player") as HTMLIFrameElement;
 
-    const loadBtn = document.getElementById("load-playlist-btn")!;
-    const select = document.getElementById("playlist-select") as HTMLSelectElement; 
-
+    // Load user's playlists into dropdown
     loadUserPlaylists(storedToken!);
 
-    addBtn.addEventListener("click", () => {
-        let uri = playlistInput.value.trim();
-        if (!uri) uri = "0ungUIGINFk2xsBMFAeguv" // whrrr at Jose;    "0lpqMVvMwCNpfzqX2RSBCM"; // default playlist 
-
+    // Add playlist from input
+    addBtn.addEventListener("click", async () => {
+        const uri = playlistInput.value.trim() || "0lpqMVvMwCNpfzqX2RSBCM"; // fallback
         currentPlaylistId = uri;
-
-        // Convert URI (spotify:playlist:ID) to embed URL
-        //let playlistId = uri.split(":")[2]; // 'spotify:playlist:ID'
+        playlistTracks = await fetchPlaylistTracks(uri);
+        currentTrackIndex = 0;
         iframe.src = `https://open.spotify.com/embed/playlist/${uri}`;
     });
 
-    // Play button with auto-skip functionality
-    playBtn.addEventListener("click", async () => {
-        if (!currentPlaylistId) {
-            alert("Add a playlist first!");
-            return;
-        }
-        if (!storedToken || !currentDeviceId) {
-            alert("Player not ready yet!");
-            return;
-        }
-
-        // Play playlist on your Spotify Web Playback SDK device
-        await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${currentDeviceId}`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${storedToken}`
-            },
-            body: JSON.stringify({ context_uri: `spotify:playlist:${currentPlaylistId}` })
-        });
-
-        // Clear previous interval if exists
-        if (skipIntervalId) clearInterval(skipIntervalId);
-
-        // Start auto skip
-        const skipSeconds = Number(skipIntervalInput.value) || 60; // default 60s
-        skipIntervalId = window.setInterval(() => {
-            fetch(`https://api.spotify.com/v1/me/player/next?device_id=${currentDeviceId}`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${storedToken}` }
-            });
-        }, skipSeconds * 1000);
-    });
-
-    stopBtn.addEventListener("click", async () => {
-        if (!storedToken || !currentDeviceId) return;
-
-        // Stop playback
-        await fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${currentDeviceId}`, {
-            method: "PUT",
-            headers: { "Authorization": `Bearer ${storedToken}` }
-        });
-
-        // Clear auto-skip interval
-        if (skipIntervalId) {
-            clearInterval(skipIntervalId);
-            skipIntervalId = null;
-        }
-    });
-
-    // pauseBtn.addEventListener("click", async () => {
-    //     if (!storedToken || !currentDeviceId) return;
-
-    //     await fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${currentDeviceId}`, {
-    //         method: "PUT",
-    //         headers: { "Authorization": `Bearer ${storedToken}` }
-    //     });
-    // });
-
-    loadBtn.addEventListener("click", () => {
+    // Load playlist from dropdown
+    loadBtn.addEventListener("click", async () => {
         const playlistId = select.value;
         if (!playlistId) {
             alert("Select a playlist first!");
             return;
         }
-
         currentPlaylistId = playlistId;
-
-        // Update your iframe player
-        const iframe = document.getElementById("spotify-player") as HTMLIFrameElement;
+        playlistTracks = await fetchPlaylistTracks(playlistId);
+        currentTrackIndex = 0;
         iframe.src = `https://open.spotify.com/embed/playlist/${playlistId}`;
+    });
+
+    // Play button with auto-skip starting at 2 minutes
+    playBtn.addEventListener("click", async () => {
+        if (!currentPlaylistId || playlistTracks.length === 0 || !storedToken || !currentDeviceId) {
+            alert("Playlist or player not ready!");
+            return;
+        }
+
+        if (skipIntervalId) clearInterval(skipIntervalId);
+        const skipSeconds = Number(skipIntervalInput.value) || 60;
+
+        // Play first track at random position (0–120s)
+        const randomStart = Math.floor(Math.random() * 120) * 1000;
+        await playTrackAtPosition(playlistTracks[currentTrackIndex], randomStart);
+
+        // Auto-skip
+        skipIntervalId = window.setInterval(async () => {
+            currentTrackIndex = (currentTrackIndex + 1) % playlistTracks.length;
+
+            // Start for next track  at random position (0–120s)
+            await playTrackAtPosition(playlistTracks[currentTrackIndex], randomStart);
+        }, skipSeconds * 1000);
+    });
+
+    // Stop button
+    stopBtn.addEventListener("click", async () => {
+        if (!storedToken || !currentDeviceId) return;
+        await fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${currentDeviceId}`, {
+            method: "PUT",
+            headers: { "Authorization": `Bearer ${storedToken}` }
+        });
+        if (skipIntervalId) clearInterval(skipIntervalId);
+        skipIntervalId = null;
     });
 }
 
+// Fetch user's playlists
 async function loadUserPlaylists(token: string) {
     const select = document.getElementById("playlist-select") as HTMLSelectElement;
-
     const response = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
         headers: { "Authorization": `Bearer ${token}` }
     });
@@ -309,13 +300,39 @@ async function loadUserPlaylists(token: string) {
     const data = await response.json();
     const playlists = data.items as { name: string; id: string }[];
 
-    // Clear previous options
     select.innerHTML = `<option value="">--Select a playlist--</option>`;
-
     playlists.forEach(pl => {
         const option = document.createElement("option");
         option.value = pl.id;
         option.innerText = pl.name;
         select.appendChild(option);
+    });
+}
+
+// Fetch all track URIs for a playlist
+async function fetchPlaylistTracks(playlistId: string): Promise<string[]> {
+    let tracks: string[] = [];
+    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+
+    while (url) {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${storedToken}` } });
+        if (!res.ok) throw new Error("Failed to fetch playlist tracks");
+        const data = await res.json();
+        tracks.push(...data.items.map((item: any) => item.track.uri));
+        url = data.next;
+    }
+
+    return tracks;
+}
+
+// Play specific track at given position
+async function playTrackAtPosition(trackUri: string, positionMs: number) {
+    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${currentDeviceId}`, {
+        method: "PUT",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${storedToken}`
+        },
+        body: JSON.stringify({ uris: [trackUri], position_ms: positionMs })
     });
 }

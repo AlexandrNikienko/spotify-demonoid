@@ -23,18 +23,20 @@
     </section>
 
     <section id="player-section" style="margin-top:2rem;">
+
+        <label for="playlist-input">Enter playlist ID if it's private or choose a public one from dropdown below:</label><br>
         <input id="playlist-input" type="text" placeholder="YOUR_PLAYLIST_ID" style="width:300px" />
         <button id="add-playlist-btn">Add Playlist</button>
         <br><br>
-
-        <label for="playlist-select">Choose your playlist:</label>
+        
         <select id="playlist-select">
             <option value="">--Select a playlist--</option>
         </select>
         <button id="load-playlist-btn">Load Playlist</button>
         <br><br>
 
-        <input id="skip-interval-input" type="number" placeholder="Skip every N seconds" />
+        <label for="skip-interval-input">Skip tracks every N seconds:</label>
+        <input id="skip-interval-input" type="number" placeholder="Skip every N seconds" value="60"/>
 
         <button id="play-btn">Play</button>
         <!-- <button id="pause-btn">Pause</button> -->
