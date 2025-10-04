@@ -3,12 +3,12 @@
 
 <head>
     <meta charset="utf-8">
-    <title>My Spotify Profile + Player</title>
+    <title>Spotify Demonoid</title>
     <script src="src/script.ts" type="module"></script>
 </head>
 
 <body>
-    <h1>🎵 My Spotify Profile</h1>
+    <h1>Spotify Demonoid</h1>
 
     <section id="profile">
         <h2>Logged in as <span id="displayName"></span></h2>
@@ -22,12 +22,26 @@
         </ul>
     </section>
 
-    <section id="player-section" style="margin-top:2rem; display:none;">
-        <h2>Spotify Player</h2>
-        <input id="playlist-input" type="text" placeholder="spotify:playlist:YOUR_PLAYLIST_ID" style="width:300px" />
+    <section id="player-section" style="margin-top:2rem;">
+        <input id="playlist-input" type="text" placeholder="YOUR_PLAYLIST_ID" style="width:300px" />
         <button id="add-playlist-btn">Add Playlist</button>
+        <br><br>
+
+        <input id="skip-interval-input" type="number" placeholder="Skip every N seconds" />
+
         <button id="play-btn">Play</button>
-        <p id="current-playlist"></p>
+        <button id="stop-btn">Stop</button>
+
+        <hr>
+        <iframe
+            id="spotify-player"
+            src="https://open.spotify.com/playlist/0lpqMVvMwCNpfzqX2RSBCM"
+            width="600"
+            height="400"
+            frameborder="0"
+            allowtransparency="true"
+            allow="encrypted-media">
+        </iframe>
     </section>
 </body>
 
