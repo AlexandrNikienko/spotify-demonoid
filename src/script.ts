@@ -3,15 +3,23 @@ const params = new URLSearchParams(window.location.search);
 const code = params.get("code");
 const redirect_uri = "http://127.0.0.1:5173/"
 
+let token: string | null = null;
+let player: any = null;
+let deviceId: string | null = null;
+let currentPlaylist: string | null = null;
+
 if (!code) {
     console.log("No code found, starting auth code flow...");
     redirectToAuthCodeFlow(clientId);
 } else {
     console.log("Code found, getting access token...");
     const accessToken = await getAccessToken(clientId, code);
+    token = accessToken;
+    localStorage.setItem("token", token);
     const profile = await fetchProfile(accessToken);
     console.log(profile); // Profile data logs to console
     populateUI(profile);
+    initPlayer();
 }
 
 export async function redirectToAuthCodeFlow(clientId: string) {
@@ -25,7 +33,7 @@ export async function redirectToAuthCodeFlow(clientId: string) {
     params.append("client_id", clientId);
     params.append("response_type", "code");
     params.append("redirect_uri", redirect_uri);
-    params.append("scope", "user-read-private user-read-email");
+    params.append("scope", "user-read-private user-read-email streaming user-read-playback-state user-modify-playback-state");
     params.append("code_challenge_method", "S256");
     params.append("code_challenge", challenge);
 
@@ -98,4 +106,49 @@ function populateUI(profile: UserProfile) {
     document.getElementById("url")!.innerText = profile.href;
     document.getElementById("url")!.setAttribute("href", profile.href);
     document.getElementById("imgUrl")!.innerText = profile.images[0]?.url ?? '(no profile image)';
+}
+
+// ===== PLAYER =====
+function initPlayer() {
+    document.getElementById("player-section")!.style.display = "block";
+    const script = document.createElement("script");
+    script.src = "https://sdk.scdn.co/spotify-player.js";
+    script.async = true;
+    document.body.appendChild(script);
+
+    window.onSpotifyWebPlaybackSDKReady = () => {
+        player = new Spotify.Player({
+            name: "Vanilla TS Spotify Player",
+            getOAuthToken: cb => cb(token!),
+            volume: 0.5
+        });
+
+        player.addListener("ready", ({ device_id }) => {
+            deviceId = device_id;
+            console.log("Player ready! Device ID:", deviceId);
+        });
+
+        player.connect();
+    };
+
+    document.getElementById("add-playlist-btn")!.addEventListener("click", () => {
+        const input = document.getElementById("playlist-input") as HTMLInputElement;
+        const playlistUri = input.value.trim();
+        if (!playlistUri || !deviceId) return;
+        currentPlaylist = playlistUri;
+        document.getElementById("current-playlist")!.innerText = `Current playlist: ${currentPlaylist}`;
+        fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ context_uri: playlistUri })
+        });
+    });
+
+    document.getElementById("play-btn")!.addEventListener("click", () => {
+        if (!deviceId) return;
+        fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}` }
+        });
+    });
 }
