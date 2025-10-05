@@ -1,4 +1,4 @@
-const clientId = "33c276b6719a4a64b6cc3d0cb518e727"; // Replace with your client id
+const clientId = "33c276b6719a4a64b6cc3d0cb518e727";
 const params = new URLSearchParams(window.location.search);
 const code = params.get("code");
 const redirect_uri = "http://127.0.0.1:5173/"
@@ -46,45 +46,17 @@ async function getValidAccessToken(): Promise<string> {
     const expiry = Number(localStorage.getItem("access_token_expiry"));
 
     if (token && expiry > Date.now()) {
-        return token; // still valid
+        return token;
     }
 
-    // expired → restart login flow
-    console.warn("Access token expired, redirecting to auth flow...");
+    console.warn("Access token expired — refreshing...");
+    const newToken = await refreshAccessToken(clientId);
+    if (newToken) return newToken;
+
+    console.warn("Refresh failed, starting new auth flow...");
     redirectToAuthCodeFlow(clientId);
-
-    return new Promise(() => {}); // never resolves (since we redirect)
+    return new Promise(() => {}); // never resolves
 }
-
-
-// // Check token validity
-// if (storedToken && storedExpiry && Number(storedExpiry) > Date.now()) {
-//     console.log("Using stored access token");
-
-//     const profile = await fetchProfile(storedToken);
-//     populateUI(profile);
-//     initPlayer();
-
-//     // Remove code from URL
-//     window.history.replaceState({}, document.title, "/");
-// } else if (code) {
-//     console.log("Code found, exchanging for access token...");
-//     const accessToken = await getAccessToken(clientId, code);
-
-//     // Save token and expiry (default Spotify token = 3600s)
-//     localStorage.setItem("access_token", accessToken);
-//     localStorage.setItem("access_token_expiry", (Date.now() + 3600 * 1000).toString());
-
-//     const profile = await fetchProfile(accessToken);
-//     populateUI(profile);
-//     initPlayer();
-
-//     // Remove code from URL
-//     window.history.replaceState({}, document.title, "/");
-// } else {
-//     console.log("No valid token, starting auth flow...");
-//     redirectToAuthCodeFlow(clientId);
-// }
 
 async function checkToken(token: string) {
     try {
@@ -112,16 +84,41 @@ if (!profile && code) {
     profile = await fetchProfile(accessToken);
 } 
 
-if (!profile) {
-    console.log("No valid token, starting auth flow...");
+if (!profile || (profile as any).error) {
+    console.log("No valid token, starting auth flow...", profile);
     redirectToAuthCodeFlow(clientId);
 } else {
     populateUI(profile);
     initPlayer();
-    window.history.replaceState({}, document.title, "/");
+    window.history.replaceState({}, document.title, redirect_uri);
+
+    setInterval(async () => {
+        const newToken = await refreshAccessToken(clientId);
+        if (newToken) console.log("Token refreshed automatically");
+    }, 50 * 60 * 1000);
+
+    logoutHandler();
 }
 /////
 
+function logoutHandler() {
+    document.getElementById("logout-btn")?.addEventListener("click", () => {
+        console.log("Logging out...");
+
+        // Clear all stored tokens
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("access_token_expiry");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("verifier");
+
+        // Optionally, clear UI elements
+        document.getElementById("displayName")!.textContent = "";
+        document.getElementById("avatar")!.innerHTML = "";
+        
+        // Redirect to homepage or restart auth
+        window.location.href = redirect_uri;
+    });
+}
 
 export async function redirectToAuthCodeFlow(clientId: string) {
     console.log("Redirecting to auth code flow...");
@@ -179,8 +176,51 @@ export async function getAccessToken(clientId: string, code: string): Promise<st
         body: params
     });
 
-    const { access_token } = await result.json();
-    return access_token;
+    const data = await result.json();
+    console.log("Token response:", data);
+
+    if (data.access_token) {
+        localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("access_token_expiry", (Date.now() + data.expires_in * 1000).toString());
+    }
+    if (data.refresh_token) {
+        localStorage.setItem("refresh_token", data.refresh_token);
+    }
+
+    return data.access_token;
+}
+
+async function refreshAccessToken(clientId: string): Promise<string | null> {
+    const refreshToken = localStorage.getItem("refresh_token");
+    if (!refreshToken) {
+        console.warn("No refresh token found");
+        return null;
+    }
+
+    console.log("Refreshing access token...");
+    const params = new URLSearchParams();
+    params.append("grant_type", "refresh_token");
+    params.append("refresh_token", refreshToken);
+    params.append("client_id", clientId);
+
+    const result = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params
+    });
+
+    const data = await result.json();
+    console.log("Refresh response:", data);
+
+    if (data.access_token) {
+        localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("access_token_expiry", (Date.now() + data.expires_in * 1000).toString());
+        if (data.refresh_token) {
+            localStorage.setItem("refresh_token", data.refresh_token);
+        }
+        return data.access_token;
+    }
+    return null;
 }
 
 async function fetchProfile(token: string): Promise<UserProfile> {
@@ -253,8 +293,10 @@ function initPlayer() {
 
     // Play button with auto-skip starting at 2 minutes
     playBtn.addEventListener("click", async () => {
-        if (!currentPlaylistId || playlistTracks.length === 0 || !storedToken || !currentDeviceId) {
-            alert("Playlist or player not ready!");
+        const token = await getValidAccessToken();
+
+        if (!currentPlaylistId || playlistTracks.length === 0 || !token || !currentDeviceId) {
+            alert("PlayBtn click: Playlist or player not ready!");
             return;
         }
 
@@ -267,6 +309,7 @@ function initPlayer() {
 
         // Auto-skip
         skipIntervalId = window.setInterval(async () => {
+            const randomStart = Math.floor(Math.random() * 120) * 1000;
             currentTrackIndex = (currentTrackIndex + 1) % playlistTracks.length;
 
             // Start for next track  at random position (0–120s)
@@ -276,10 +319,14 @@ function initPlayer() {
 
     // Stop button
     stopBtn.addEventListener("click", async () => {
-        if (!storedToken || !currentDeviceId) return;
+        const token = await getValidAccessToken();
+        if (!token || !currentDeviceId) {
+            alert("StopBtn click: Playlist or player not ready!");
+            return;
+        }
         await fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${currentDeviceId}`, {
             method: "PUT",
-            headers: { "Authorization": `Bearer ${storedToken}` }
+            headers: { "Authorization": `Bearer ${token}` }
         });
         if (skipIntervalId) clearInterval(skipIntervalId);
         skipIntervalId = null;
@@ -315,8 +362,10 @@ async function fetchPlaylistTracks(playlistId: string): Promise<string[]> {
     let tracks: string[] = [];
     let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
 
+    const token = await getValidAccessToken();
+
     while (url) {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${storedToken}` } });
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) throw new Error("Failed to fetch playlist tracks");
         const data = await res.json();
         tracks.push(...data.items.map((item: any) => item.track.uri));
@@ -328,11 +377,13 @@ async function fetchPlaylistTracks(playlistId: string): Promise<string[]> {
 
 // Play specific track at given position
 async function playTrackAtPosition(trackUri: string, positionMs: number) {
+    const token = await getValidAccessToken();
+
     await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${currentDeviceId}`, {
         method: "PUT",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${storedToken}`
+            "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify({ uris: [trackUri], position_ms: positionMs })
     });
