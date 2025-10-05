@@ -11,24 +11,24 @@
     <h1>Spotify Demonoid</h1>
 
     <section id="profile">
-        <h2>Logged in as <span id="displayName"></span></h2>
+        <h2>Greetings <span id="displayName"></span></h2>
         <span id="avatar"></span>
         <ul>
-            <li>User ID: <span id="id"></span></li>
+            <!-- <li>User ID: <span id="id"></span></li> -->
             <li>Email: <span id="email"></span></li>
             <li>Spotify URI: <a id="uri" href="#"></a></li>
-            <li>Link: <a id="url" href="#"></a></li>
-            <li>Profile Image: <span id="imgUrl"></span></li>
+            <!-- <li>Link: <a id="url" href="#"></a></li> -->
+            <!-- <li>Profile Image: <span id="imgUrl"></span></li> -->
         </ul>
     </section>
 
     <section id="player-section" style="margin-top:2rem;">
 
         <label for="playlist-input">Enter playlist ID if it's private or choose a public one from dropdown below:</label><br>
-        <input id="playlist-input" type="text" placeholder="YOUR_PLAYLIST_ID" style="width:300px" />
+        <input id="playlist-input" type="text" placeholder="YOUR_PLAYLIST_ID" />
         <button id="add-playlist-btn">Add Playlist</button>
         <br><br>
-        
+
         <select id="playlist-select">
             <option value="">--Select a playlist--</option>
         </select>
@@ -39,7 +39,6 @@
         <input id="skip-interval-input" type="number" placeholder="Skip every N seconds" value="60"/>
 
         <button id="play-btn">Play</button>
-        <!-- <button id="pause-btn">Pause</button> -->
         <button id="stop-btn">Stop</button>
 
         <hr>
