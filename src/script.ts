@@ -1,10 +1,38 @@
 const clientId = "33c276b6719a4a64b6cc3d0cb518e727";
 const params = new URLSearchParams(window.location.search);
 const code = params.get("code");
-const redirect_uri = "http://127.0.0.1:5173/"
+const redirect_uri = "http://127.0.0.1:5173/";
 
-let storedToken = localStorage.getItem("access_token");
-const storedExpiry = localStorage.getItem("access_token_expiry");
+(async () => {
+    let profile = await checkToken(localStorage.getItem("access_token"));
+
+    if (!profile && code) {
+        const accessToken = await getAccessToken(clientId, code);
+        localStorage.setItem("access_token", accessToken);
+        localStorage.setItem("access_token_expiry", (Date.now() + 3600 * 1000).toString());
+        profile = await fetchProfile(accessToken);
+    }
+
+    if (!profile || (profile as any).error) {
+        console.log("No valid token, starting auth flow...", profile);
+        redirectToAuthCodeFlow(clientId);
+    } else {
+        populateUI(profile);
+        initPlayer();
+        window.history.replaceState({}, document.title, redirect_uri);
+
+        // keep refresh + reconnect
+        setInterval(async () => {
+            const newToken = await refreshAccessToken(clientId);
+            if (newToken) {
+                console.log("Token refreshed automatically");
+                if ((window as any).player) (window as any).player.connect();
+            }
+        }, 50 * 60 * 1000);
+
+        logoutHandler();
+    }
+})();
 
 //Access to player
 const script = document.createElement("script");
@@ -55,50 +83,31 @@ async function getValidAccessToken(): Promise<string> {
 
     console.warn("Refresh failed, starting new auth flow...");
     redirectToAuthCodeFlow(clientId);
-    return new Promise(() => {}); // never resolves
+    throw new Error("Unable to refresh access token — restarting auth");
 }
 
-async function checkToken(token: string) {
+async function checkToken(token: string | null) {
+    if (!token) return null;
+
+    const expiry = Number(localStorage.getItem("access_token_expiry"));
+    if (!expiry || expiry <= Date.now()) {
+        console.warn("Stored token expired, refreshing...");
+        const newToken = await refreshAccessToken(clientId);
+        if (!newToken) return null;
+        token = newToken;
+    }
+
     try {
         const profile = await fetchProfile(token);
         return profile;
     } catch (err) {
-        console.warn("Stored token invalid, clearing it.", err);
+        console.warn("Token invalid, clearing it.", err);
         localStorage.removeItem("access_token");
         localStorage.removeItem("access_token_expiry");
         return null;
     }
 }
 
-let profile = null;
-
-if (storedToken && storedExpiry && Number(storedExpiry) > Date.now()) {
-    profile = await checkToken(storedToken);
-}
-
-if (!profile && code) {
-    const accessToken = await getAccessToken(clientId, code);
-    localStorage.setItem("access_token", accessToken);
-    localStorage.setItem("access_token_expiry", (Date.now() + 3600 * 1000).toString());
-
-    profile = await fetchProfile(accessToken);
-} 
-
-if (!profile || (profile as any).error) {
-    console.log("No valid token, starting auth flow...", profile);
-    redirectToAuthCodeFlow(clientId);
-} else {
-    populateUI(profile);
-    initPlayer();
-    window.history.replaceState({}, document.title, redirect_uri);
-
-    setInterval(async () => {
-        const newToken = await refreshAccessToken(clientId);
-        if (newToken) console.log("Token refreshed automatically");
-    }, 50 * 60 * 1000);
-
-    logoutHandler();
-}
 /////
 
 function logoutHandler() {
@@ -114,7 +123,7 @@ function logoutHandler() {
         // Optionally, clear UI elements
         document.getElementById("displayName")!.textContent = "";
         document.getElementById("avatar")!.innerHTML = "";
-        
+
         // Redirect to homepage or restart auth
         window.location.href = redirect_uri;
     });
@@ -235,7 +244,7 @@ async function fetchProfile(token: string): Promise<UserProfile> {
 function populateUI(profile: UserProfile) {
     console.log("Populating UI... with profile", profile);
     document.getElementById("displayName")!.innerText = profile.display_name;
-    if (profile.images[0]) {
+    if (profile.images && profile.images.length > 0) {
         const profileImage = new Image(200, 200);
         profileImage.src = profile.images[0].url;
         document.getElementById("avatar")!.appendChild(profileImage);
@@ -251,7 +260,7 @@ function populateUI(profile: UserProfile) {
 }
 
 // ===== PLAYER =====
-function initPlayer() {
+async function initPlayer() {
     let skipIntervalId: number | null = null;
     let currentPlaylistId: string | null = null;
     let playlistTracks: string[] = [];
@@ -267,7 +276,8 @@ function initPlayer() {
     const iframe = document.getElementById("spotify-player") as HTMLIFrameElement;
 
     // Load user's playlists into dropdown
-    loadUserPlaylists(storedToken!);
+    const token = await getValidAccessToken();
+    loadUserPlaylists(token);
 
     // Add playlist from input
     addBtn.addEventListener("click", async () => {
@@ -296,7 +306,7 @@ function initPlayer() {
         const token = await getValidAccessToken();
 
         if (!currentPlaylistId || playlistTracks.length === 0 || !token || !currentDeviceId) {
-            alert("PlayBtn click: Playlist or player not ready!");
+            alert("PlayBtn click: Playlist or token not ready!");
             return;
         }
 
@@ -320,6 +330,7 @@ function initPlayer() {
     // Stop button
     stopBtn.addEventListener("click", async () => {
         const token = await getValidAccessToken();
+
         if (!token || !currentDeviceId) {
             alert("StopBtn click: Playlist or player not ready!");
             return;
