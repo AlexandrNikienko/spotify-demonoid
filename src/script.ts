@@ -26,7 +26,10 @@ const redirect_uri = "http://127.0.0.1:5173/";
             const newToken = await refreshAccessToken(clientId);
             if (newToken) {
                 console.log("Token refreshed automatically");
-                if ((window as any).player) (window as any).player.connect();
+                if ((window as any).player) {
+                    (window as any).player.connect();
+                    (window as any).player.activateElement();
+                }
             }
         }, 50 * 60 * 1000);
     }
@@ -48,7 +51,7 @@ let currentDeviceId: string | null = null;
             const freshToken = await getValidAccessToken();
             cb(freshToken);
         },
-        volume: 0.01 //TODO: make adjustable
+        volume: 0.005 //TODO: make adjustable
     });
 
     // Save device ID when ready
@@ -77,6 +80,7 @@ let currentDeviceId: string | null = null;
 
     // Connect!
     player.connect();
+    player.activateElement();
 };
 
 async function getValidAccessToken(): Promise<string> {
@@ -292,18 +296,6 @@ async function initPlayer() {
     const token = await getValidAccessToken();
     await loadUserPlaylists(token);
 
-    async function loadPlaylist(playlistId: string) {
-        if (!playlistId) {
-            alert("Please select or enter a playlist!");
-            return;
-        }
-
-        currentPlaylistId = playlistId;
-        playlistTracks = await fetchPlaylistTracks(playlistId);
-        currentTrackIndex = 0;
-        iframe.src = `https://open.spotify.com/embed/playlist/${playlistId}`;
-    }
-
     // Add playlist manually
     addBtn.addEventListener("click", async () => {
         const playlistId = playlistInput.value.trim() || "0lpqMVvMwCNpfzqX2RSBCM"; // MK playlist as default
@@ -316,34 +308,6 @@ async function initPlayer() {
         await loadPlaylist(playlistId);
     });
 
-    // Helper: random number in range
-    function getRandomBetween(min: number, max: number): number {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
-    }
-
-    // Recursive auto-skip with random delay
-    async function autoSkipToNextTrack(isFirst = false) {
-        if (!isPlaying) return;
-
-        // Random start position within track (0–120s)
-        let randomStart = getRandomBetween(0, 120) * 1000;
-
-        // Increment index only after the first run
-        if (!isFirst) {
-            currentTrackIndex = (currentTrackIndex + 1) % playlistTracks.length;
-            randomStart = 0;
-        }
-
-        const trackUri = playlistTracks[currentTrackIndex];
-
-        await playTrackAtPosition(trackUri, randomStart);
-
-        // Schedule next skip
-        const randomDelaySec = getRandomBetween(90, 120);
-        console.log(`⏭️ Next skip in ${randomDelaySec}s`);
-        skipTimeoutId = window.setTimeout(() => autoSkipToNextTrack(false), randomDelaySec * 1000);
-    }
-
     // Play button
     playBtn.addEventListener("click", async () => {
         const token = await getValidAccessToken();
@@ -354,8 +318,6 @@ async function initPlayer() {
 
         if (skipTimeoutId) clearTimeout(skipTimeoutId);
         isPlaying = true;
-
-        console.log(`▶️ Playing first track #${currentTrackIndex + 1} at 0s`);
 
         // Sync iframe preview
         //iframe.src = `https://open.spotify.com/embed/track/${playlistTracks[currentTrackIndex].split(":").pop()}`;
@@ -380,60 +342,103 @@ async function initPlayer() {
         });
         console.log("🛑 Playback stopped");
     });
-}
 
-// Fetch user's playlists
-async function loadUserPlaylists(token: string) {
-    const select = document.getElementById("playlist-select") as HTMLSelectElement;
-    const response = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
-        headers: { "Authorization": `Bearer ${token}` }
-    });
+    async function loadPlaylist(playlistId: string) {
+        if (!playlistId) {
+            alert("Please select or enter a playlist!");
+            return;
+        }
 
-    if (!response.ok) {
-        console.error("Failed to fetch playlists", await response.text());
-        return;
+        currentPlaylistId = playlistId;
+        playlistTracks = await fetchPlaylistTracks(playlistId);
+        currentTrackIndex = 0;
+        iframe.src = `https://open.spotify.com/embed/playlist/${playlistId}`;
     }
 
-    const data = await response.json();
-    const playlists = data.items as { name: string; id: string }[];
-
-    select.innerHTML = `<option value="">--Select a playlist--</option>`;
-    playlists.forEach(pl => {
-        const option = document.createElement("option");
-        option.value = pl.id;
-        option.innerText = pl.name;
-        select.appendChild(option);
-    });
-}
-
-// Fetch all track URIs for a playlist
-async function fetchPlaylistTracks(playlistId: string): Promise<string[]> {
-    let tracks: string[] = [];
-    let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
-
-    const token = await getValidAccessToken();
-
-    while (url) {
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) throw new Error("Failed to fetch playlist tracks");
-        const data = await res.json();
-        tracks.push(...data.items.map((item: any) => item.track.uri));
-        url = data.next;
+    function getRandomBetween(min: number, max: number): number {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
     }
 
-    return tracks;
-}
+    // Recursive auto-skip with random delay
+    async function autoSkipToNextTrack(isFirst = false) {
+        if (!isPlaying) return;
 
-// Play specific track at given position
-async function playTrackAtPosition(trackUri: string, positionMs: number) {
-    const token = await getValidAccessToken();
+        // Random start position within track (0–120s)
+        let randomStart = Number(skipIntervalInput.value.trim()) || getRandomBetween(0, 120) * 1000;
 
-    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${currentDeviceId}`, {
-        method: "PUT",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ uris: [trackUri], position_ms: positionMs })
-    });
+        // Increment index only after the first run
+        if (!isFirst) {
+            currentTrackIndex = (currentTrackIndex + 1) % playlistTracks.length;
+        } else {
+            //randomStart = 0; //?
+            console.log(`▶️ Playing track #${currentTrackIndex + 1} at ${randomStart}s`);
+        }
+
+        console.log(`▶️ Playing track #${currentTrackIndex + 1} at ${randomStart}s`);
+
+        const trackUri = playlistTracks[currentTrackIndex];
+
+        await playTrackAtPosition(trackUri, randomStart);
+
+        // Schedule next skip
+        const randomDelaySec = getRandomBetween(120, 180);
+        console.log(`⏭️ Next skip in ${randomDelaySec}s`);
+        skipTimeoutId = window.setTimeout(() => autoSkipToNextTrack(false), randomDelaySec * 1000);
+    }
+
+    // Fetch user's playlists
+    async function loadUserPlaylists(token: string) {
+        const select = document.getElementById("playlist-select") as HTMLSelectElement;
+        const response = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+            console.error("Failed to fetch playlists", await response.text());
+            return;
+        }
+
+        const data = await response.json();
+        const playlists = data.items as { name: string; id: string }[];
+
+        select.innerHTML = `<option value="">--Select a playlist--</option>`;
+        playlists.forEach(pl => {
+            const option = document.createElement("option");
+            option.value = pl.id;
+            option.innerText = pl.name;
+            select.appendChild(option);
+        });
+    }
+
+    // Fetch all track URIs for a playlist
+    async function fetchPlaylistTracks(playlistId: string): Promise<string[]> {
+        let tracks: string[] = [];
+        let url = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`;
+
+        const token = await getValidAccessToken();
+
+        while (url) {
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+            if (!res.ok) throw new Error("Failed to fetch playlist tracks");
+            const data = await res.json();
+            tracks.push(...data.items.map((item: any) => item.track.uri));
+            url = data.next;
+        }
+
+        return tracks;
+    }
+
+    // Play specific track at given position
+    async function playTrackAtPosition(trackUri: string, positionMs: number) {
+        const token = await getValidAccessToken();
+
+        await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${currentDeviceId}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ uris: [trackUri], position_ms: positionMs })
+        });
+    }
 }
