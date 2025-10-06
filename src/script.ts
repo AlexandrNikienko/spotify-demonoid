@@ -29,8 +29,6 @@ const redirect_uri = "http://127.0.0.1:5173/";
                 if ((window as any).player) (window as any).player.connect();
             }
         }, 50 * 60 * 1000);
-
-        logoutHandler();
     }
 })();
 
@@ -50,7 +48,7 @@ let currentDeviceId: string | null = null;
             const freshToken = await getValidAccessToken();
             cb(freshToken);
         },
-        volume: 0.5
+        volume: 0.01 //TODO: make adjustable
     });
 
     // Save device ID when ready
@@ -64,6 +62,18 @@ let currentDeviceId: string | null = null;
     player.addListener("authentication_error", ({ message }: any) => { console.error(message); });
     player.addListener("account_error", ({ message }: any) => { console.error(message); });
     player.addListener("playback_error", ({ message }: any) => { console.error(message); });
+
+    player.addListener('player_state_changed', (state: any) => {
+        if (!state) return;
+
+        const track = state.track_window.current_track;
+        const titleEl = document.getElementById("track-title");
+
+        if (track && titleEl) {
+            const artistNames = track.artists.map((a: any) => a.name).join(", ");
+            titleEl.textContent = `${track.name} — ${artistNames}`;
+        }
+    });
 
     // Connect!
     player.connect();
@@ -257,11 +267,14 @@ function populateUI(profile: UserProfile) {
     //document.getElementById("url")!.innerText = profile.href;
     //document.getElementById("url")!.setAttribute("href", profile.href);
     //document.getElementById("imgUrl")!.innerText = profile.images[0]?.url ?? '(no profile image)';
+
+    logoutHandler();
 }
 
 // ===== PLAYER =====
 async function initPlayer() {
-    let skipIntervalId: number | null = null;
+    let skipTimeoutId: number | null = null;
+    let isPlaying = false;
     let currentPlaylistId: string | null = null;
     let playlistTracks: string[] = [];
     let currentTrackIndex = 0;
@@ -277,70 +290,95 @@ async function initPlayer() {
 
     // Load user's playlists into dropdown
     const token = await getValidAccessToken();
-    loadUserPlaylists(token);
+    await loadUserPlaylists(token);
 
-    // Add playlist from input
-    addBtn.addEventListener("click", async () => {
-        const uri = playlistInput.value.trim() || "0lpqMVvMwCNpfzqX2RSBCM"; // fallback
-        currentPlaylistId = uri;
-        playlistTracks = await fetchPlaylistTracks(uri);
+    async function loadPlaylist(playlistId: string) {
+        if (!playlistId) {
+            alert("Please select or enter a playlist!");
+            return;
+        }
+
+        currentPlaylistId = playlistId;
+        playlistTracks = await fetchPlaylistTracks(playlistId);
         currentTrackIndex = 0;
-        iframe.src = `https://open.spotify.com/embed/playlist/${uri}`;
+        iframe.src = `https://open.spotify.com/embed/playlist/${playlistId}`;
+    }
+
+    // Add playlist manually
+    addBtn.addEventListener("click", async () => {
+        const playlistId = playlistInput.value.trim() || "0lpqMVvMwCNpfzqX2RSBCM"; // MK playlist as default
+        await loadPlaylist(playlistId);
     });
 
     // Load playlist from dropdown
     loadBtn.addEventListener("click", async () => {
         const playlistId = select.value;
-        if (!playlistId) {
-            alert("Select a playlist first!");
-            return;
-        }
-        currentPlaylistId = playlistId;
-        playlistTracks = await fetchPlaylistTracks(playlistId);
-        currentTrackIndex = 0;
-        iframe.src = `https://open.spotify.com/embed/playlist/${playlistId}`;
+        await loadPlaylist(playlistId);
     });
 
-    // Play button with auto-skip starting at 2 minutes
+    // Helper: random number in range
+    function getRandomBetween(min: number, max: number): number {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    // Recursive auto-skip with random delay
+    async function autoSkipToNextTrack(isFirst = false) {
+        if (!isPlaying) return;
+
+        // Random start position within track (0–120s)
+        let randomStart = getRandomBetween(0, 120) * 1000;
+
+        // Increment index only after the first run
+        if (!isFirst) {
+            currentTrackIndex = (currentTrackIndex + 1) % playlistTracks.length;
+            randomStart = 0;
+        }
+
+        const trackUri = playlistTracks[currentTrackIndex];
+
+        await playTrackAtPosition(trackUri, randomStart);
+
+        // Schedule next skip
+        const randomDelaySec = getRandomBetween(90, 120);
+        console.log(`⏭️ Next skip in ${randomDelaySec}s`);
+        skipTimeoutId = window.setTimeout(() => autoSkipToNextTrack(false), randomDelaySec * 1000);
+    }
+
+    // Play button
     playBtn.addEventListener("click", async () => {
         const token = await getValidAccessToken();
-
         if (!currentPlaylistId || playlistTracks.length === 0 || !token || !currentDeviceId) {
             alert("PlayBtn click: Playlist or token not ready!");
             return;
         }
 
-        if (skipIntervalId) clearInterval(skipIntervalId);
-        const skipSeconds = Number(skipIntervalInput.value) || 60;
+        if (skipTimeoutId) clearTimeout(skipTimeoutId);
+        isPlaying = true;
 
-        // Play first track at random position (0–120s)
-        const randomStart = Math.floor(Math.random() * 120) * 1000;
-        await playTrackAtPosition(playlistTracks[currentTrackIndex], randomStart);
+        console.log(`▶️ Playing first track #${currentTrackIndex + 1} at 0s`);
 
-        // Auto-skip
-        skipIntervalId = window.setInterval(async () => {
-            const randomStart = Math.floor(Math.random() * 120) * 1000;
-            currentTrackIndex = (currentTrackIndex + 1) % playlistTracks.length;
+        // Sync iframe preview
+        //iframe.src = `https://open.spotify.com/embed/track/${playlistTracks[currentTrackIndex].split(":").pop()}`;
 
-            // Start for next track  at random position (0–120s)
-            await playTrackAtPosition(playlistTracks[currentTrackIndex], randomStart);
-        }, skipSeconds * 1000);
+        // Start auto-skip loop
+        await autoSkipToNextTrack(true);
     });
 
     // Stop button
     stopBtn.addEventListener("click", async () => {
         const token = await getValidAccessToken();
-
         if (!token || !currentDeviceId) {
-            alert("StopBtn click: Playlist or player not ready!");
+            alert("StopBtn click: Player not ready!");
             return;
         }
+        isPlaying = false;
+        if (skipTimeoutId) clearTimeout(skipTimeoutId);
+
         await fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${currentDeviceId}`, {
             method: "PUT",
-            headers: { "Authorization": `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` }
         });
-        if (skipIntervalId) clearInterval(skipIntervalId);
-        skipIntervalId = null;
+        console.log("🛑 Playback stopped");
     });
 }
 

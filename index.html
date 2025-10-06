@@ -24,7 +24,7 @@
 
     <section id="player-section" style="margin-top:2rem;">
 
-        <label for="playlist-input">Enter playlist ID if it's private or choose a public one from dropdown below:</label><br>
+        <label for="playlist-input">Enter playlist ID if it's yours and private or any public one, or choose one of your publics from dropdown below:</label><br>
         <input id="playlist-input" type="text" placeholder="YOUR_PLAYLIST_ID" />
         <button id="add-playlist-btn">Add Playlist</button>
         <br><br>
@@ -35,15 +35,20 @@
         <button id="load-playlist-btn">Load Playlist</button>
         <br><br>
 
-        <label for="skip-interval-input">Skip tracks every N seconds:</label>
-        <input id="skip-interval-input" type="number" placeholder="Skip every N seconds" value="60"/>
+        <label for="skip-interval-input">Skip tracks every N seconds (default is random from 60 to 120 sec):</label>
+        <input id="skip-interval-input" type="number" placeholder="Skip every N seconds"/>
 
         <button id="play-btn">Play</button>
         <button id="stop-btn">Stop</button>
 
         <button id="logout-btn">Logout</button>
+
         <hr>
+        <div id="now-playing" style="margin-top: 20px; font-size: 16px; font-weight: 500;">
+            🎵 Now Playing: <span id="track-title">—</span>
+        </div>
         <iframe
+            style="background-color: rgb(22, 236, 100);"
             id="spotify-player"
             src=""
             width="600"
