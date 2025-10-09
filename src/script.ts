@@ -259,7 +259,7 @@ function populateUI(profile: UserProfile) {
     console.log("Populating UI... with profile", profile);
     document.getElementById("displayName")!.innerText = profile.display_name;
     if (profile.images && profile.images.length > 0) {
-        const profileImage = new Image(200, 200);
+        const profileImage = new Image(20, 20);
         profileImage.src = profile.images[0].url;
         document.getElementById("avatar")!.appendChild(profileImage);
     }
@@ -361,29 +361,64 @@ async function initPlayer() {
 
     // Recursive auto-skip with random delay
     async function autoSkipToNextTrack(isFirst = false) {
-        if (!isPlaying) return;
+        if (!isPlaying || !playlistTracks.length) return;
+        if (!currentDeviceId) {
+            console.warn("Player not ready yet, retrying in 2s...");
+            setTimeout(() => autoSkipToNextTrack(isFirst), 2000);
+            return;
+        }
 
-        // Random start position within track (0–120s)
-        let randomStart = Number(skipIntervalInput.value.trim()) || getRandomBetween(0, 120) * 1000;
+        const playOptions = ["nextWithSeek", "play"];
+        let choice = playOptions[getRandomBetween(0, playOptions.length - 1)];
 
-        // Increment index only after the first run
         if (!isFirst) {
             currentTrackIndex = (currentTrackIndex + 1) % playlistTracks.length;
         } else {
-            //randomStart = 0; //?
-            console.log(`▶️ Playing track #${currentTrackIndex + 1} at ${randomStart}s`);
+            choice = "play";
         }
-
-        console.log(`▶️ Playing track #${currentTrackIndex + 1} at ${randomStart}s`);
 
         const trackUri = playlistTracks[currentTrackIndex];
 
-        await playTrackAtPosition(trackUri, randomStart);
+        //console.log(`➡️ Track #${currentTrackIndex + 1} choice: ${choice}`);
 
-        // Schedule next skip
-        const randomDelaySec = getRandomBetween(120, 180);
-        console.log(`⏭️ Next skip in ${randomDelaySec}s`);
-        skipTimeoutId = window.setTimeout(() => autoSkipToNextTrack(false), randomDelaySec * 1000);
+        choice = "play"; // TEMP: force play mode for testing
+
+        switch (choice) {
+            case "nextWithSeek":
+                console.log(`⏭️ Skipping to next track: #${currentTrackIndex + 1}`);
+                await fetch(`https://api.spotify.com/v1/me/player/next?device_id=${currentDeviceId}`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${await getValidAccessToken()}` },
+                });
+
+                if (getRandomBetween(0, 1) === 1) {
+                    const randomStart = getRandomBetween(120, 240) * 1000;
+                    setTimeout(async () => {
+                        console.log(`⏩ Seeking to ${randomStart / 1000}s`);
+                        await fetch(`https://api.spotify.com/v1/me/player/seek?position_ms=${randomStart}&device_id=${currentDeviceId}`, {
+                            method: "PUT",
+                            headers: { Authorization: `Bearer ${await getValidAccessToken()}` },
+                        });
+                    }, 20000);
+                }
+
+                break;
+
+            case "play":
+                const randomStart = Number(skipIntervalInput.value.trim()) || getRandomBetween(0, 120) * 1000;
+                console.log(`▶️ Playing track #${currentTrackIndex + 1} at ${randomStart / 1000}s`);
+                await playTrackAtPosition(trackUri, randomStart);
+
+                break;
+
+            case "finish":
+                console.log("🚩 Finish mode — waiting for track end event instead of skipping.");
+                break;
+        }
+
+        const delay = getRandomBetween(120, 180);
+        console.log(`⏭️ Next skip in ${delay}s`);
+        skipTimeoutId = setTimeout(() => autoSkipToNextTrack(false), delay * 1000);
     }
 
     // Fetch user's playlists
