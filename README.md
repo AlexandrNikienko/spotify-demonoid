@@ -6,19 +6,11 @@ It automatically plays short snippets of each track — perfect for artists, cur
 <br/><br/>
 🚀 Features:
 
-- 🔄 Auto-skip playback — plays a few seconds of each track, then moves to the next
+- 🔄 Auto-skip playback — plays a preview of each track, then moves to the next
 
 - 🎚️ Randomized start positions — each track starts from a random time for variety
 
 - 🎧 Spotify authorization flow (implicit grant)
-
-<!--🧠 Smart playback modes:
-
-nextWithSeek — skips to next track, then seeks to random time
-
-play — plays selected track from random position
-
-finish — finishes current track before moving on-->
 
 🧩 Tech Stack
 
