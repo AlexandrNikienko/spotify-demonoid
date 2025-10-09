@@ -1,7 +1,9 @@
 const clientId = "33c276b6719a4a64b6cc3d0cb518e727";
 const params = new URLSearchParams(window.location.search);
 const code = params.get("code");
-const redirect_uri = "http://127.0.0.1:5173/";
+const redirect_uri = window.location.hostname === "127.0.0.1"
+    ? "http://127.0.0.1:5173/"
+    : "https://spotify-demonoid.netlify.app/";
 
 (async () => {
     let profile = await checkToken(localStorage.getItem("access_token"));
