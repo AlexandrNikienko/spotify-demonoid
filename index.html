@@ -1,64 +1,76 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="utf-8">
-    <title>Spotify Demonoid</title>
-    <script src="src/script.ts" type="module"></script>
-    <link rel="icon" href="spotify-demonoid.png">
-</head>
-
 <body>
-    <h1><img src="spotify-demonoid.png" alt="Spotify Demonoid logo" width="40" style="vertical-align: bottom;"/>Spotify Demonoid</h1>
+    <!-- WELCOME SCREEN -->
+    <section id="welcome-screen" style="text-align:center; margin-top:100px;">
+        <img src="spotify-demonoid.png" alt="Logo" width="100" height="100"/>
 
-    <section id="profile">
-        <h2>Greetings <span id="displayName"></span></h2>
-        <span id="avatar"></span>
-        <ul>
-            <!-- <li>User ID: <span id="id"></span></li> -->
-            <li>Email: <span id="email"></span></li>
-            <li>Spotify URI: <a id="uri" href="#"></a></li>
-            <!-- <li>Link: <a id="url" href="#"></a></li> -->
-            <!-- <li>Profile Image: <span id="imgUrl"></span></li> -->
-        </ul>
+        <h1>Spotify Demonoid</h1>
+
+        <p style="max-width:500px; margin:auto; line-height:1.5;">
+            Welcome to <strong>Spotify Demonoid</strong> - tool for previewing and exploring
+            your playlists faster.
+            It plays short sections of your tracks automatically, giving you
+            a "demo" experience of your playlists.
+        </p>
+
+        <button id="start-btn" style="
+            margin-top:20px; 
+            padding:10px 25px; 
+            font-size:16px; 
+            background:linear-gradient(45deg, #8b00ff, #000);
+            color:white; 
+            border:none; 
+            border-radius:6px; 
+            cursor:pointer;"
+        >
+            Start
+        </button>
     </section>
 
-    <section id="player-section" style="margin-top:2rem;">
+    <!-- MAIN APP CONTENT -->
+    <div id="app" style="display:none;">
+        <h1>
+            <img src="spotify-demonoid.png" alt="Spotify Demonoid logo" width="40"
+                style="vertical-align: bottom;" />
+            Spotify Demonoid
+        </h1>
 
-        <label for="playlist-input">Enter playlist ID if it's yours and private or any public one, or choose one of your publics from dropdown below:</label><br>
-        <input id="playlist-input" type="text" placeholder="YOUR_PLAYLIST_ID" />
-        <button id="add-playlist-btn">Add Playlist</button>
-        <br><br>
+        <section id="profile">
+            <h2>Greetings <span id="displayName"></span> <span id="avatar" style="border-radius: 100%; overflow: hidden; display: inline-block"></span></h2>
+            
+            <ul>
+                <li>Email: <span id="email"></span></li>
+                <li>Spotify URI: <a id="uri" href="#"></a></li>
+            </ul>
+        </section>
 
-        <select id="playlist-select">
-            <option value="">--Select a playlist--</option>
-        </select>
-        <button id="load-playlist-btn">Load Playlist</button>
-        <br><br>
+        <section id="player-section" style="margin-top:2rem;">
+            <label for="playlist-input">Enter playlist ID or select one of your public playlists:</label><br>
+            <input id="playlist-input" type="text" placeholder="YOUR_PLAYLIST_ID" />
+            <button id="add-playlist-btn">Add Playlist</button>
+            <br><br>
 
-        <label for="skip-interval-input">Skip tracks every N seconds (default is random from 60 to 120 sec):</label>
-        <input id="skip-interval-input" type="number" placeholder="Skip every N seconds"/>
+            <select id="playlist-select">
+                <option value="">--Select a playlist--</option>
+            </select>
+            <button id="load-playlist-btn">Load Playlist</button>
+            <br><br>
 
-        <button id="play-btn">Play</button>
-        <button id="stop-btn">Stop</button>
+            <label for="skip-interval-input">Skip interval (seconds):</label>
+            <input id="skip-interval-input" type="number" placeholder="" />
 
-        <button id="logout-btn">Logout</button>
+            <button id="play-btn">Play</button>
+            <button id="stop-btn">Stop</button>
+            <button id="logout-btn">Logout</button>
 
-        <hr>
-        <div id="now-playing" style="margin-top: 20px; font-size: 16px; font-weight: 500;">
-            🎵 Now Playing: <span id="track-title">—</span>
-        </div>
-        <iframe
-            style="background-color: rgb(22, 236, 100);"
-            id="spotify-player"
-            src=""
-            width="600"
-            height="400"
-            frameborder="0"
-            allowtransparency="true"
-            allow="encrypted-media">
-        </iframe>
-    </section>
+            <hr>
+            <div id="now-playing" style="margin-top: 20px; font-size: 16px; font-weight: 500;">
+                Now Playing: <span id="track-title">-</span>
+            </div>
+            <iframe style="background-color: rgb(22, 236, 100);" id="spotify-player" src="" width="600" height="400"
+                frameborder="0" allowtransparency="true" allow="encrypted-media">
+            </iframe>
+        </section>
+    </div>
+
+    <script src="src/script.ts" type="module"></script>
 </body>
-
-</html>

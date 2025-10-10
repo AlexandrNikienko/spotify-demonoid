@@ -1,6 +1,6 @@
+let appStarted = false;
 const clientId = "33c276b6719a4a64b6cc3d0cb518e727";
-const params = new URLSearchParams(window.location.search);
-const code = params.get("code");
+
 let redirect_uri: string;
 
 if (window.location.hostname === "127.0.0.1") {
@@ -11,8 +11,32 @@ if (window.location.hostname === "127.0.0.1") {
     redirect_uri = "https://spotify-demonoid.netlify.app/";
 }
 
+const welcomeScreen = document.getElementById("welcome-screen")!;
+const app = document.getElementById("app")!;
+const startBtn = document.getElementById("start-btn")!;
+
+startBtn.addEventListener("click", () => {
+    appStarted = true;
+    welcomeScreen.style.display = "none";
+    redirectToAuthCodeFlow(clientId);
+});
+
 (async () => {
-    let profile = await checkToken(localStorage.getItem("access_token"));
+    //Show welcome screen first
+    const hasToken = localStorage.getItem("access_token");
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+
+    if (!hasToken && !code) {
+        console.log("🕒 Waiting for user to click Start...");
+        welcomeScreen.style.display = "block";
+        app.style.display = "none";
+        return;
+    }
+
+    appStarted = true;
+
+    let profile = await checkToken(hasToken);
 
     if (!profile && code) {
         const accessToken = await getAccessToken(clientId, code);
@@ -23,8 +47,13 @@ if (window.location.hostname === "127.0.0.1") {
 
     if (!profile || (profile as any).error) {
         console.log("No valid token, starting auth flow...", profile);
-        redirectToAuthCodeFlow(clientId);
+        return
+        //redirectToAuthCodeFlow(clientId);
     } else {
+        // Hide welcome, show main UI
+        document.getElementById("welcome-screen")!.style.display = "none";
+        app!.style.display = "block";
+
         populateUI(profile);
         initPlayer();
         window.history.replaceState({}, document.title, redirect_uri);
@@ -104,7 +133,11 @@ async function getValidAccessToken(): Promise<string> {
     if (newToken) return newToken;
 
     console.warn("Refresh failed, starting new auth flow...");
-    redirectToAuthCodeFlow(clientId);
+    if (appStarted) {
+        redirectToAuthCodeFlow(clientId);
+    } else {
+        console.log("⏸️ Skipping auth redirect until Start pressed.");
+    }
     throw new Error("Unable to refresh access token — restarting auth");
 }
 
@@ -191,6 +224,7 @@ async function generateCodeChallenge(codeVerifier: string) {
 }
 
 export async function getAccessToken(clientId: string, code: string): Promise<string> {
+    //TODO show loader on UI
     console.log("Getting access token...");
     const verifier = localStorage.getItem("verifier");
 
@@ -255,6 +289,7 @@ async function refreshAccessToken(clientId: string): Promise<string | null> {
 }
 
 async function fetchProfile(token: string): Promise<UserProfile> {
+    //TODO show loader on UI
     console.log("Fetching profile...");
     const result = await fetch("https://api.spotify.com/v1/me", {
         method: "GET", headers: { Authorization: `Bearer ${token}` }
@@ -264,21 +299,18 @@ async function fetchProfile(token: string): Promise<UserProfile> {
 }
 
 function populateUI(profile: UserProfile) {
+    //TODO show loader on UI
     console.log("Populating UI... with profile", profile);
     document.getElementById("displayName")!.innerText = profile.display_name;
     if (profile.images && profile.images.length > 0) {
-        const profileImage = new Image(20, 20);
+        const profileImage = new Image(30, 30);
         profileImage.src = profile.images[0].url;
         document.getElementById("avatar")!.appendChild(profileImage);
     }
-    //document.getElementById("id")!.innerText = profile.id;
     document.getElementById("email")!.innerText = profile.email;
     document.getElementById("uri")!.innerText = profile.uri;
     document.getElementById("uri")!.setAttribute("href", profile.external_urls.spotify);
     document.getElementById("uri")!.setAttribute("target", "blank");
-    //document.getElementById("url")!.innerText = profile.href;
-    //document.getElementById("url")!.setAttribute("href", profile.href);
-    //document.getElementById("imgUrl")!.innerText = profile.images[0]?.url ?? '(no profile image)';
 
     logoutHandler();
 }
