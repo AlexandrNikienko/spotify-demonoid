@@ -1,0 +1,39 @@
+.control-btn {
+  background-color: #1db954;
+  border: none;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: #1ed760;
+  }
+}
+
+.start-btn {
+  margin-top: 20px;
+  padding: 10px 25px;
+  font-size: 16px;
+  background: linear-gradient(45deg, #8b00ff, #000);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: .3s;
+
+  &:hover {
+    background: linear-gradient(45deg, #000, #8b00ff);
+  }
+}
+
+button {
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover {
+    cursor: pointer;
+  }
+}

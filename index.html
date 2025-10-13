@@ -1,3 +1,10 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="./src/styles/styles.css">
+    <title>Spotify Demonoid</title>
+</head>
 <body>
     <!-- WELCOME SCREEN -->
     <section id="welcome-screen" style="text-align:center; margin-top:100px;">
@@ -8,41 +15,27 @@
         <p style="max-width:500px; margin:auto; line-height:1.5;">
             Welcome to <strong>Spotify Demonoid</strong> - tool for previewing and exploring
             your playlists faster.
-            It plays short sections of your tracks automatically, giving you
-            a "demo" experience of your playlists.
+            It plays preview of tracks automatically, giving you
+            a "demo" experience of playlists.
         </p>
 
-        <button id="start-btn" style="
-            margin-top:20px; 
-            padding:10px 25px; 
-            font-size:16px; 
-            background:linear-gradient(45deg, #8b00ff, #000);
-            color:white; 
-            border:none; 
-            border-radius:6px; 
-            cursor:pointer;"
-        >
-            Start
-        </button>
+        <button id="start-btn" class="start-btn">Start</button>
     </section>
 
     <!-- MAIN APP CONTENT -->
     <div id="app" style="display:none;">
         <h1>
             <img src="spotify-demonoid.png" alt="Spotify Demonoid logo" width="40"
-                style="vertical-align: bottom;" />
-            Spotify Demonoid
+                style="vertical-align: bottom;" />Spotify Demonoid
         </h1>
 
         <section id="profile">
             <h2>Greetings <span id="displayName"></span> <span id="avatar" style="border-radius: 100%; overflow: hidden; display: inline-block"></span></h2>
-            
-            <ul>
-                <li>Email: <span id="email"></span></li>
-                <li>Spotify URI: <a id="uri" href="#"></a></li>
-            </ul>
+            <p>Email: <span id="email"></span></p>
+            <p>Spotify URI: <a id="uri" href="#"></a></p>
+            <button id="logout-btn">Logout</button>
         </section>
-
+        <br>
         <section id="player-section" style="margin-top:2rem;">
             <label for="playlist-input">Enter playlist ID or select one of your public playlists:</label><br>
             <input id="playlist-input" type="text" placeholder="YOUR_PLAYLIST_ID" />
@@ -58,9 +51,20 @@
             <label for="skip-interval-input">Skip interval (seconds):</label>
             <input id="skip-interval-input" type="number" placeholder="" />
 
-            <button id="play-btn">Play</button>
-            <button id="stop-btn">Stop</button>
-            <button id="logout-btn">Logout</button>
+            <button id="play-btn" class="control-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" aria-hidden="true" role="img">
+                    <title>Play</title>
+                    <path fill="currentColor" d="M4 2.5v19a1 1 0 0 0 1.555.832L20.5 13.832a1 1 0 0 0 0-1.664L5.555 1.668A1 1 0 0 0 4 2.5z"/>
+                </svg>
+
+            </button>
+            <button id="stop-btn" class="control-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" aria-hidden="true" role="img">
+                    <title>Stop</title>
+                    <rect x="4" y="4" width="16" height="16" rx="1" fill="currentColor"/>
+                </svg>
+
+            </button>
 
             <hr>
             <div id="now-playing" style="margin-top: 20px; font-size: 16px; font-weight: 500;">
@@ -72,5 +76,8 @@
         </section>
     </div>
 
-    <script src="src/script.ts" type="module"></script>
+    <div style="margin-top: 4rem;">Developed by astropuding@gmail.com</div>
+
+    <script src="src/main.ts" type="module"></script>
 </body>
+</html>

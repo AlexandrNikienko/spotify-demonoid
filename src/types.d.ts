@@ -21,3 +21,13 @@ interface Image {
     height: number;
     width: number;
 }
+
+type SimplePlaylist = {
+  items: {
+    name: string;
+    id: string;
+    description: string | null;
+    images: { url: string }[];
+    tracks: { total: number}
+  }[],
+};
